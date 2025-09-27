@@ -1,2 +1,2 @@
 # PriceCharting-App
-This project is a desktop application built with Python and Tkinter that automates downloading, cleaning, and analyzing video game price data from PriceCharting.com  using their API.
+This full-stack web app helps collectors and resellers price video games fast and accurately. The Python backend normalizes and caches data from the PriceCharting API, while the React UI lets you search titles, select condition (Loose, CIB, New, Graded, etc.), and compare live market prices. Built for speed and clarity, it supports watchlists, bulk lookups, and exportable reports so you can make informed buy/sell decisions in seconds.
