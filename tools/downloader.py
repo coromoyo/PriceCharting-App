@@ -1,14 +1,15 @@
 import os
 import requests
 import pandas as pd
-
 from utils import sanitize_filename, drop_excel_letter_ranges  # same names, same behavior
+from pricechart.config import SETTINGS
 
 API_BASE = "https://www.pricecharting.com/price-guide/download-custom?t=823553b0078080e630aaba81011b96ff4bba6ba6&console-uids="
-SAVE_DIR = r"C:\Users\kikat\Desktop\Database OTGPCE"
-EXCEL_FILE = r"C:\Users\kikat\Desktop\UIDS of consoles.xlsx"
+SAVE_DIR = SETTINGS["data_path"]
+EXCEL_FILE = SETTINGS["uids_excel"]
 DELETE_CSV_AFTER = True
 REQUEST_TIMEOUT = 60
+
 
 def main():
     os.makedirs(SAVE_DIR, exist_ok=True)
