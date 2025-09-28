@@ -1,9 +1,9 @@
 from customtkinter import *
 from tkinter import filedialog
 from pricechart.config import CONFIG_PATH, DEFAULT_SETTINGS, SETTINGS, load_settings, save_settings
-from pricechart import data_store
+from pricechart import data_storing
 from pricechart.data_storing import refresh_xlsx_files
-from pricechart.UI.tabs import PriceTab
+from pricechart.ui.tabs import PriceTab
 
 # initialize theming (same as original)
 set_appearance_mode(SETTINGS["theme"].lower())
