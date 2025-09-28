@@ -1,7 +1,7 @@
 import os
 import requests
 import pandas as p
-from utils import sanitize_filename, drop_excel_letter_ranges  # same names, same behavior
+from tools.dl_utils import sanitize_filename, drop_excel_letter_ranges  # same names, same behavior
 from pricechart.config import SETTINGS
 
 API_BASE = "https://www.pricecharting.com/price-guide/download-custom?t=823553b0078080e630aaba81011b96ff4bba6ba6&console-uids="
@@ -13,7 +13,7 @@ REQUEST_TIMEOUT = 60
 
 def main():
     os.makedirs(SAVE_DIR, exist_ok=True)
-    df_list = pd.read_excel(EXCEL_FILE, header=0)
+    df_list = p.read_excel(EXCEL_FILE, header=0)
     df_list = df_list.dropna(how="all")
     for _, row in df_list.iterrows():
         console_name = sanitize_filename(str(row.iloc[0]))
@@ -34,7 +34,7 @@ def main():
             with open(csv_path, "wb") as f:
                 f.write(resp.content)
             print(f"✅ Downloaded & replaced {os.path.basename(csv_path)}")
-            df_csv = pd.read_csv(csv_path, low_memory=False)
+            df_csv = p.read_csv(csv_path, low_memory=False)
             df_clean = drop_excel_letter_ranges(df_csv)
             df_clean.to_excel(xlsx_path, index=False)
             print(f"📂 Converted & cleaned → {os.path.basename(xlsx_path)}")
