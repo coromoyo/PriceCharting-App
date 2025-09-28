@@ -1,6 +1,6 @@
 import os
 import requests
-import pandas as pd
+import pandas as p
 from utils import sanitize_filename, drop_excel_letter_ranges  # same names, same behavior
 from pricechart.config import SETTINGS
 
