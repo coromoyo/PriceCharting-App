@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pricechart-postgres
+    environment:
+      POSTGRES_USER: pricechart
+      POSTGRES_PASSWORD: pricechart
+      POSTGRES_DB: pricechart
+    ports:
+      - "5432:5432"
+    volumes:
+      - pricechart_pgdata:/var/lib/postgresql/data
+
+volumes:
+  pricechart_pgdata:
