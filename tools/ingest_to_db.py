@@ -51,18 +51,31 @@ def ingest_xlsx(xlsx_path: str, snapshot_date: date):
     df = pd.read_excel(xlsx_path)
 
     # normalize headers: your file uses hyphens (console-name)
-    # we’ll access using those exact names
     required = ["id", "console-name", "product-name"]
     for col in required:
         if col not in df.columns:
-            raise ValueError(f"Missing required column '{col}' in {xlsx_path}. Columns={list(df.columns)}")
+            raise ValueError(
+                f"Missing required column '{col}' in {xlsx_path}. Columns={list(df.columns)}"
+            )
 
-    # drop rows with no id/product
-    df = df.dropna(subset=["id", "product-name"])
+    # ---- CLEAN + VALIDATE REQUIRED FIELDS ----
+    df["id"] = df["id"].apply(parse_int)
 
-    # ensure ids are ints
-    df["id"] = df["id"].apply(lambda x: int(float(x)) if pd.notna(x) else None)
-    df = df.dropna(subset=["id"])
+    df["console-name"] = df["console-name"].astype(str).str.strip()
+    df["product-name"] = df["product-name"].astype(str).str.strip()
+
+    # drop rows missing required values (match DB constraints)
+    df = df.dropna(subset=["id", "console-name", "product-name"])
+    df = df[
+        (df["console-name"] != "") &
+        (df["product-name"] != "")
+    ]
+
+    # guard against empty files (prevents DEFAULT VALUES insert)
+    if df.empty:
+        print(f"⚠️ Skipping {os.path.basename(xlsx_path)}: no valid rows after filtering")
+        return 0, 0
+
 
     session = SessionLocal()
     try:
@@ -77,6 +90,9 @@ def ingest_xlsx(xlsx_path: str, snapshot_date: date):
                 "genre": (None if pd.isna(r.get("genre")) else str(r.get("genre")).strip()) if "genre" in df.columns else None,
                 "release_date": parse_date(r.get("release-date")) if "release-date" in df.columns else None,
             })
+        if not game_rows:
+            print(f"⚠️ Skipping {os.path.basename(xlsx_path)}: no games to insert")
+            return 0, 0
 
         stmt_games = insert(Game).values(game_rows)
         stmt_games = stmt_games.on_conflict_do_update(
@@ -151,19 +167,20 @@ def main():
             os.path.join(data_path, f) for f in os.listdir(data_path)
             if f.lower().endswith(".xlsx")
         ]
-
     total_games = 0
     total_snaps = 0
+
     for path in xlsx_files:
         if not os.path.exists(path):
             print(f"⚠️ Missing file: {path}")
             continue
+        print(f"→ Ingesting {os.path.basename(path)}")
         g, s = ingest_xlsx(path, snapshot_date)
         total_games += g
         total_snaps += s
-        print(f"✅ Ingested {os.path.basename(path)} → games:{g}, snapshots:{s} (date={snapshot_date})")
-
+        print(f"  ✓ games={g}, snapshots={s}")
     print(f"\nDone. Total games rows processed: {total_games}, total snapshots processed: {total_snaps}")
+
 
 
 if __name__ == "__main__":
