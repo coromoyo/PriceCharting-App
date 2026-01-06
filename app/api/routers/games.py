@@ -121,3 +121,32 @@ def get_game_snapshots(
         })
 
     return out
+
+@router.get("/{game_id}/latest-snapshot", response_model=SnapshotOut)
+def get_latest_snapshot(game_id: int, db: Session = Depends(get_db)):
+    # Ensure game exists (nice UX)
+    if not db.get(Game, game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Latest snapshot = max(snapshot_date)
+    stmt = (
+        select(GamePriceSnapshot)
+        .where(GamePriceSnapshot.game_id == game_id)
+        .order_by(GamePriceSnapshot.snapshot_date.desc())
+        .limit(1)
+    )
+
+    snap = db.execute(stmt).scalars().first()
+    if not snap:
+        raise HTTPException(status_code=404, detail="No snapshots found for this game")
+
+    return {
+        "snapshot_date": snap.snapshot_date,
+        "loose_price": float(snap.loose_price) if snap.loose_price is not None else None,
+        "cib_price": float(snap.cib_price) if snap.cib_price is not None else None,
+        "new_price": float(snap.new_price) if snap.new_price is not None else None,
+        "graded_price": float(snap.graded_price) if snap.graded_price is not None else None,
+        "box_only_price": float(snap.box_only_price) if snap.box_only_price is not None else None,
+        "manual_only_price": float(snap.manual_only_price) if snap.manual_only_price is not None else None,
+        "sales_volume": snap.sales_volume,
+    }
