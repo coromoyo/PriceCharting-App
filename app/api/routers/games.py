@@ -1,10 +1,9 @@
 from datetime import date
 from typing import Optional, List
-
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import select, func, and_
-
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import select, func, and_, or_
+from app.api.schemas import GamesWithLatestPage, GameWithLatestSnapshotOut  # add this
 from pricechart.models import Game, GamePriceSnapshot
 from app.api.deps import get_db
 from app.api.schemas import GameOut, GamesPage, SnapshotOut
@@ -43,6 +42,94 @@ def list_games(
 
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     items = db.execute(stmt).scalars().all()
+
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "items": items,
+    }
+@router.get("/with-latest", response_model=GamesWithLatestPage)
+def list_games_with_latest(
+    console: Optional[str] = Query(default=None, description="Exact console_name match"),
+    q: Optional[str] = Query(default=None, description="Search in product_name (case-insensitive)"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    filters = []
+    if console:
+        filters.append(Game.console_name == console)
+    if q:
+        filters.append(Game.product_name.ilike(f"%{q.strip()}%"))
+
+    where_clause = and_(*filters) if filters else None
+
+    # Total count (same as /games)
+    count_stmt = select(func.count()).select_from(Game)
+    if where_clause is not None:
+        count_stmt = count_stmt.where(where_clause)
+    total = db.execute(count_stmt).scalar_one()
+
+    # Subquery: for each game_id, find max(snapshot_date)
+    latest_date_sq = (
+        select(
+            GamePriceSnapshot.game_id.label("game_id"),
+            func.max(GamePriceSnapshot.snapshot_date).label("max_date"),
+        )
+        .group_by(GamePriceSnapshot.game_id)
+        .subquery()
+    )
+
+    # Alias snapshot table for join
+    LatestSnap = aliased(GamePriceSnapshot)
+
+    # Main query:
+    # Game LEFT JOIN (latest_date_sq) LEFT JOIN LatestSnap on (game_id, snapshot_date=max_date)
+    stmt = (
+        select(Game, LatestSnap)
+        .outerjoin(latest_date_sq, latest_date_sq.c.game_id == Game.id)
+        .outerjoin(
+            LatestSnap,
+            and_(
+                LatestSnap.game_id == Game.id,
+                LatestSnap.snapshot_date == latest_date_sq.c.max_date,
+            ),
+        )
+        .order_by(Game.product_name.asc())
+    )
+
+    if where_clause is not None:
+        stmt = stmt.where(where_clause)
+
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+    rows = db.execute(stmt).all()
+
+    items = []
+    for game, snap in rows:
+        latest_snapshot = None
+        if snap is not None:
+            latest_snapshot = {
+                "snapshot_date": snap.snapshot_date,
+                "loose_price": float(snap.loose_price) if snap.loose_price is not None else None,
+                "cib_price": float(snap.cib_price) if snap.cib_price is not None else None,
+                "new_price": float(snap.new_price) if snap.new_price is not None else None,
+                "graded_price": float(snap.graded_price) if snap.graded_price is not None else None,
+                "box_only_price": float(snap.box_only_price) if snap.box_only_price is not None else None,
+                "manual_only_price": float(snap.manual_only_price) if snap.manual_only_price is not None else None,
+                "sales_volume": snap.sales_volume,
+            }
+
+        items.append({
+            "id": game.id,
+            "console_name": game.console_name,
+            "product_name": game.product_name,
+            "upc": game.upc,
+            "genre": game.genre,
+            "release_date": game.release_date,
+            "latest_snapshot": latest_snapshot,
+        })
 
     return {
         "page": page,

@@ -70,3 +70,35 @@ export async function fetchLatestSnapshot(game_id: number) {
   return (await res.json()) as Snapshot;
 }
 
+export type GameWithLatest = Game & {
+  latest_snapshot: Snapshot | null;
+};
+
+export type GamesWithLatestPage = {
+  page: number;
+  page_size: number;
+  total: number;
+  items: GameWithLatest[];
+};
+
+export async function fetchGamesWithLatest(params: {
+  page?: number;
+  page_size?: number;
+  console?: string;
+  q?: string;
+}) {
+  const url = new URL(`${API_BASE_URL}/games/with-latest`);
+  const sp = new URLSearchParams();
+
+  if (params.page) sp.set("page", String(params.page));
+  if (params.page_size) sp.set("page_size", String(params.page_size));
+  if (params.console) sp.set("console", params.console);
+  if (params.q) sp.set("q", params.q);
+
+  url.search = sp.toString();
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Failed to fetch games+latest (${res.status})`);
+  return (await res.json()) as GamesWithLatestPage;
+}
+

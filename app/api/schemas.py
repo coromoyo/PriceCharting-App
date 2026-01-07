@@ -1,6 +1,5 @@
 from datetime import date
 from typing import Optional, List
-
 from pydantic import BaseModel
 
 
@@ -36,3 +35,13 @@ class SnapshotOut(BaseModel):
 
 class ConsoleOut(BaseModel):
     console_name: str
+
+class GameWithLatestSnapshotOut(GameOut):
+    latest_snapshot: Optional[SnapshotOut] = None
+
+class GamesWithLatestPage(BaseModel):
+    page: int
+    page_size: int
+    total: int
+    items: List[GameWithLatestSnapshotOut]
+

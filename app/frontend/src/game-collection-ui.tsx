@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, ChevronDown, Plus } from 'lucide-react';
-import { fetchGames as apiFetchGames, fetchGamesByName, fetchLatestSnapshot } from "./api/pricechartApi";
+import { fetchGamesWithLatest, fetchGamesByName, fetchLatestSnapshot } from "./api/pricechartApi";
 
 // adjust relative path if needed
 
@@ -14,29 +14,6 @@ type UIGame = {
   priceDetails: string;
   value: number;
 };
-
-const mockGameData = [
-  {
-    id: 1,
-    title: 'Earthbound',
-    platform: 'SNES',
-    image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=80&h=80&fit=crop',
-    condition: 'Complete',
-    priceDetails: 'CIB:$2,197.58 L:$327.96 N:$7,032.00',
-    value: 2197.58
-  },
-  {
-    id: 2,
-    title: 'Mario 64',
-    platform: 'N64',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=80&h=80&fit=crop',
-    condition: 'Loose',
-    priceDetails: 'CIB:$142.22 L:$38.76 N:$929.91',
-    value: 38.76
-  }
-];
-
-
 
 export default function GameCollectionUI() {
   const [activeTab, setActiveTab] = useState(0);
@@ -60,74 +37,38 @@ export default function GameCollectionUI() {
     fetchGames();
   }, []);
 
-  // API FUNCTIONS - These handle all communication with FastAPI
 
-  // const fetchGames = async () => {
-  //   setLoading(true);
-  //   setError(null);
-  //   try {
-  //     // UNCOMMENT THIS WHEN YOUR API IS READY:
-  //     // const response = await fetch(API_ENDPOINTS.getGames);
-  //     // if (!response.ok) throw new Error('Failed to fetch games');
-  //     // const data = await response.json();
-  //     // setGames(data);
-
-  //     // USING MOCK DATA FOR NOW:
-  //     setGames(mockGameData);
-  //   } catch (err) {
-  //     setError(err.message);
-  //     console.error('Error fetching games:', err);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
   const fetchGames = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const data = await apiFetchGames({ page: 1, page_size: 50 });
+      const data = await fetchGamesWithLatest({ page: 1, page_size: 50 });
 
-      // Map backend -> UI shape
-      const base: UIGame[] = data.items.map((g) => ({
-        id: g.id,
-        title: g.product_name,
-        platform: g.console_name,
-        image: "https://via.placeholder.com/80",
-        condition: "Complete",
-        priceDetails: "",
-        value: 0,
-      }));
+      const mapped: UIGame[] = data.items.map((g) => {
+        const snap = g.latest_snapshot;
 
-      // Set immediately so UI renders fast
-      setGames(base);
+        return {
+          id: g.id,
+          title: g.product_name,
+          platform: g.console_name,
+          image: "https://via.placeholder.com/80",
+          condition: "Complete",
+          priceDetails: snap ? buildPriceDetails(snap) : "",
+          value: snap ? pickValueByCondition(snap, "Complete") : 0,
+        };
+      });
 
-      // Then enrich with latest snapshots (parallel)
-      const enriched = await Promise.all(
-        base.map(async (game) => {
-          try {
-            const snap = await fetchLatestSnapshot(game.id);
-            return {
-              ...game,
-              priceDetails: buildPriceDetails(snap),
-              value: pickValueByCondition(snap, game.condition),
-            };
-          } catch {
-            // If a game has no snapshots yet, keep defaults
-            return game;
-          }
-        })
-      );
-
-      setGames(enriched);
-
+      setGames(mapped);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch games');
-      console.error('Error fetching games:', err);
+      setError(err.message || "Failed to fetch games");
+      console.error("Error fetching games:", err);
     } finally {
       setLoading(false);
     }
   };
+
+
   const formatUSD = (n: number | null | undefined) =>
     n == null ? "--" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -191,41 +132,6 @@ export default function GameCollectionUI() {
   };
 
 
-  // const searchForGames = async () => {
-  //   if (!searchText.trim()) {
-  //     alert('Please enter a game title to search');
-  //     return;
-  //   }
-
-  //   setLoading(true);
-  //   try {
-  //     // UNCOMMENT THIS WHEN YOUR API IS READY:
-  //     // const response = await fetch(`${API_BASE_URL}/search?query=${encodeURIComponent(searchText)}`);
-  //     // if (!response.ok) throw new Error('Failed to search games');
-  //     // const data = await response.json();
-  //     // setSearchResults(data);
-
-  //     // MOCK SEARCH RESULTS FOR NOW:
-  //     const mockResults = [
-  //       {
-  //         id: Date.now(),
-  //         title: searchText,
-  //         platform: 'SNES',
-  //         image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=80&h=80&fit=crop',
-  //         condition: filterState,
-  //         priceDetails: 'CIB:$100.00 L:$50.00 N:$200.00',
-  //         value: 100.00
-  //       }
-  //     ];
-  //     setSearchResults(mockResults);
-  //     setShowAddGameModal(true);
-  //   } catch (err) {
-  //     setError(err.message);
-  //     console.error('Error searching games:', err);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
   const searchForGames = async () => {
     if (!searchText.trim()) {
       alert('Please enter a game title to search');
@@ -289,14 +195,6 @@ export default function GameCollectionUI() {
       alert('This game is already in your list');
       return;
     }
-
-    // UNCOMMENT THIS WHEN YOUR API IS READY:
-    // const response = await fetch(API_ENDPOINTS.createGame, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(game)
-    // });
-    // if (!response.ok) throw new Error('Failed to add game');
 
     setGames([...games, game]);
     setShowAddGameModal(false);
